@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ckb" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>نرخ بخوێنەرەوە</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--text:#1f1f1d;--muted:#6b6a64;--line:#dedcd3;--accent:#185FA5;--accent-bg:#E6F1FB;--ok:#27500A;--ok-bg:#EAF3DE;--bad:#791F1F;--bad-bg:#FCEBEB;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1c1a;--card:#262624;--text:#f1efe8;--muted:#b4b2a9;--line:#444441;--accent:#85B7EB;--accent-bg:#042C53;--ok:#C0DD97;--ok-bg:#173404;--bad:#F7C1C1;--bad-bg:#501313;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1c1c1a;--card:#262624;--text:#f1efe8;--muted:#b4b2a9;--line:#444441;--accent:#85B7EB;--accent-bg:#042C53;--ok:#C0DD97;--ok-bg:#173404;--bad:#F7C1C1;--bad-bg:#501313;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.6}
+.wrap{max-width:480px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:0 0 4px;font-weight:600}
+.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+#cam{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;display:none}
+#cam video{width:100%;height:100%;object-fit:cover}
+#cam .line{position:absolute;left:10%;right:10%;top:50%;height:2px;background:#e24b4a}
+#reader{width:100%}
+button{font:inherit;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+button.main{background:var(--accent);color:#fff;border-color:var(--accent);width:100%;font-size:16px;padding:12px}
+:root[data-theme="dark"] button.main{color:#042C53}
+.row{display:flex;gap:8px}
+input[type=text]{flex:1;font:inherit;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);direction:ltr;text-align:left}
+#res{display:none}
+.price{font-size:34px;font-weight:600;color:var(--ok)}
+.tag{display:inline-block;font-size:12px;padding:2px 10px;border-radius:8px;background:var(--accent-bg);color:var(--accent);direction:ltr}
+.ok{background:var(--ok-bg)}.bad{background:var(--bad-bg);color:var(--bad)}
+.item{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
+.item:last-child{border:0}
+.code{direction:ltr;color:var(--muted);font-size:12px}
+small{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>نرخ بخوێنەرەوە</h1>
+  <p class="sub">باڕکۆدی هەر کاڵایەک بخوێنەرەوە و نرخەکەی لێرە ببینە</p>
+
+  <div class="card">
+    <div id="cam"><video id="vid" playsinline muted></video><div class="line"></div></div>
+    <div id="reader" style="display:none"></div>
+    <button class="main" id="start">کامێرا بکەرەوە</button>
+    <p id="camMsg" class="sub" style="margin:8px 0 0"></p>
+  </div>
+
+  <div id="res" class="card"></div>
+
+  <div class="card">
+    <div class="row">
+      <input type="text" id="manual" inputmode="numeric" placeholder="6281007000123">
+      <button id="find">بگەڕێ</button>
+    </div>
+    <small>یان ژمارەی باڕکۆدەکە بە دەست بنووسە</small>
+  </div>
+
+  <div class="card">
+    <strong>لیستی نرخەکان</strong><br>
+    <small>فایلی CSV بار بکە بە شێوەی: باڕکۆد,ناو,نرخ</small>
+    <div style="margin:8px 0"><input type="file" id="csv" accept=".csv,.txt"></div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+var DEFAULT_DATA = [
+  ["6281007000123","شیر (١ لیتر)",1500],
+  ["6281007000124","نان (پاکەت)",1000],
+  ["5449000000996","کۆکا کۆلا (٣٣٠ مل)",750],
+  ["6221031000015","ڕۆن (١ لیتر)",3500],
+  ["8901234567890","برنج (١ کگم)",2250]
+];
+var products = {};
+function load(rows){
+  products = {};
+  rows.forEach(function(r){ products[String(r[0]).trim()] = {name:r[1], price:Number(r[2])}; });
+  renderList();
+}
+function fmt(n){ return Number(n).toLocaleString("en-US") + " دینار"; }
+function renderList(){
+  var h = "";
+  Object.keys(products).forEach(function(c){
+    h += '<div class="item" data-c="'+c+'"><span>'+products[c].name+'<br><span class="code">'+c+'</span></span><span>'+fmt(products[c].price)+'</span></div>';
+  });
+  document.getElementById("list").innerHTML = h;
+  Array.prototype.forEach.call(document.querySelectorAll(".item"), function(el){
+    el.onclick = function(){ show(el.getAttribute("data-c")); };
+  });
+}
+function show(code){
+  code = String(code).trim();
+  var el = document.getElementById("res"), p = products[code];
+  el.style.display = "block";
+  if (p) {
+    el.innerHTML = '<span class="tag ok">'+code+'</span><div style="font-size:18px;margin:6px 0">'+p.name+'</div><div class="price">'+fmt(p.price)+'</div>';
+  } else {
+    el.innerHTML = '<span class="tag bad">'+code+'</span><div style="margin-top:6px">ئەم کاڵایە لە لیستی ئەم مارکێتە نییە</div>';
+  }
+  if (navigator.vibrate) { try { navigator.vibrate(60); } catch(e){} }
+}
+document.getElementById("find").onclick = function(){
+  var v = document.getElementById("manual").value;
+  if (v.trim()) show(v);
+};
+document.getElementById("csv").onchange = function(e){
+  var f = e.target.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function(){
+    var rows = r.result.split(/\r?\n/).map(function(l){ return l.split(","); })
+      .filter(function(a){ return a.length >= 3 && /^\d{6,14}$/.test(a[0].trim()); });
+    if (rows.length) { load(rows); try { localStorage.setItem("prices", JSON.stringify(rows)); } catch(x){} }
+  };
+  r.readAsText(f);
+};
+
+var stream = null, timer = null, last = "", lastT = 0;
+function onCode(code){
+  var now = Date.now();
+  if (code === last && now - lastT < 2500) return;
+  last = code; lastT = now; show(code);
+}
+function setMsg(t){ document.getElementById("camMsg").textContent = t; }
+
+async function startNative(){
+  var det = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128"]});
+  stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}, audio:false});
+  var v = document.getElementById("vid");
+  v.srcObject = stream; await v.play();
+  document.getElementById("cam").style.display = "block";
+  timer = setInterval(async function(){
+    try {
+      var r = await det.detect(v);
+      if (r.length) onCode(r[0].rawValue);
+    } catch(e){}
+  }, 300);
+}
+function startFallback(){
+  return new Promise(function(resolve, reject){
+    function go(){
+      document.getElementById("reader").style.display = "block";
+      var q = new Html5Qrcode("reader");
+      q.start({facingMode:"environment"}, {fps:10, qrbox:{width:260, height:140}}, onCode, function(){})
+        .then(function(){ stream = q; resolve(); }).catch(reject);
+    }
+    if (window.Html5Qrcode) return go();
+    var s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
+    s.onload = go; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+function stop(){
+  if (timer) clearInterval(timer);
+  if (stream && stream.getTracks) stream.getTracks().forEach(function(t){ t.stop(); });
+  else if (stream && stream.stop) stream.stop();
+  stream = null; timer = null;
+  document.getElementById("cam").style.display = "none";
+  document.getElementById("reader").style.display = "none";
+}
+document.getElementById("start").onclick = async function(){
+  var b = this;
+  if (stream) { stop(); b.textContent = "کامێرا بکەرەوە"; setMsg(""); return; }
+  try {
+    setMsg("چاوەڕێ بکە…");
+    if ("BarcodeDetector" in window) await startNative(); else await startFallback();
+    b.textContent = "کامێرا دابخە";
+    setMsg("باڕکۆدەکە بخەرە ناو چوارچێوەکە");
+  } catch(e){
+    setMsg("کامێرا نەکرایەوە. ڕێگە بدە بە کامێرا، یان ژمارەکە بە دەست بنووسە.");
+  }
+};
+
+var saved = null;
+try { saved = JSON.parse(localStorage.getItem("prices") || "null"); } catch(e){}
+load(saved && saved.length ? saved : DEFAULT_DATA);
+</script>
+</body>
+</html>
